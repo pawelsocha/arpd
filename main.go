@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	routeros "github.com/pawelsocha/routeros.v2"
+	routeros "github.com/pawelsocha/routeros"
 )
 
 type Arpd struct {

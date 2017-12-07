@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	logging "github.com/op/go-logging"
 	"os"
+
+	logging "github.com/op/go-logging"
 )
 
 var Log = logging.MustGetLogger("arpd")

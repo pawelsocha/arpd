@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	. "github.com/pawelsocha/kryptond/logging"
 	routeros "github.com/pawelsocha/routeros"
 )
 

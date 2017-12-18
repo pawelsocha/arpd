@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pawelsocha/kryptond/config"
+	"github.com/pawelsocha/kryptond/database"
 	. "github.com/pawelsocha/kryptond/logging"
 	routeros "github.com/pawelsocha/routeros"
 )
@@ -17,6 +19,7 @@ type Arpd struct {
 }
 
 func (a *Arpd) Run() {
+
 	a.cache = make(map[string]string)
 	go a.Collect()
 
@@ -78,10 +81,24 @@ func (a *Arpd) handleConnection(conn net.Conn) {
 }
 
 func main() {
+	config, err := config.New(ConfigFile)
+
+	if err != nil {
+		Log.Critical("Can't read configuration. Error: ", err)
+		return
+	}
+
+	routers, err := database.Database(config).GetRoutersList()
+	if err != nil {
+		Log.Critical("Can't get list of routers from database. Error:", err)
+	}
+	Log.Infof("routers: %v", routers)
+
 	arpd := &Arpd{
 		done:   make(chan bool),
 		result: make(chan *routeros.Reply),
 	}
+
 	/* TODO:
 	w.ExecuteCommand("/ip/arp/print", arpd.Result())
 	*/

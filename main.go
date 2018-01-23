@@ -9,6 +9,7 @@ import (
 	"github.com/pawelsocha/kryptond/config"
 	"github.com/pawelsocha/kryptond/database"
 	. "github.com/pawelsocha/kryptond/logging"
+	"github.com/pawelsocha/kryptond/mikrotik"
 	routeros "github.com/pawelsocha/routeros"
 )
 
@@ -92,15 +93,20 @@ func main() {
 	if err != nil {
 		Log.Critical("Can't get list of routers from database. Error:", err)
 	}
+
+	workers := mikrotik.NewWorkers()
+
 	Log.Infof("routers: %v", routers)
 
 	arpd := &Arpd{
 		done:   make(chan bool),
 		result: make(chan *routeros.Reply),
 	}
+	for _, device := range routers {
+		workers.AddNewDevice(device.PrivateAddress)
+	}
 
-	/* TODO:
-	w.ExecuteCommand("/ip/arp/print", arpd.Result())
-	*/
+	workers.ExecuteCommand("/ip/arp/print", arpd.Result())
+
 	arpd.Run()
 }

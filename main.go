@@ -10,6 +10,7 @@ import (
 	"github.com/pawelsocha/kryptond/database"
 	. "github.com/pawelsocha/kryptond/logging"
 	"github.com/pawelsocha/kryptond/mikrotik"
+	"github.com/pawelsocha/kryptond/router"
 	routeros "github.com/pawelsocha/routeros"
 )
 
@@ -89,7 +90,8 @@ func main() {
 		return
 	}
 
-	routers, err := database.Database(config).GetRoutersList()
+	db, err := database.Database(config)
+	routers, err := router.GetRoutersList(db)
 	if err != nil {
 		Log.Critical("Can't get list of routers from database. Error:", err)
 	}

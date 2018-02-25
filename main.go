@@ -16,7 +16,7 @@ import (
 
 type Arpd struct {
 	done   chan bool
-	result chan *routeros.Reply
+	result chan mikrotik.Result
 	cache  map[string]string
 }
 
@@ -51,12 +51,16 @@ func (a *Arpd) Collect() {
 		case <-a.done:
 			return
 		case result := <-a.result:
-			a.processResult(result)
+			if result.Error != nil {
+				Log.Errorf("Routeros return error: %s", result.Error)
+				continue
+			}
+			a.processResult(&result.Reply)
 		}
 	}
 }
 
-func (a *Arpd) Result() chan *routeros.Reply {
+func (a *Arpd) Result() chan mikrotik.Result {
 	return a.result
 }
 
@@ -102,7 +106,7 @@ func main() {
 
 	arpd := &Arpd{
 		done:   make(chan bool),
-		result: make(chan *routeros.Reply),
+		result: make(chan mikrotik.Result),
 	}
 	for _, device := range routers {
 		workers.AddNewDevice(device.PrivateAddress)

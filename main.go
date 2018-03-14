@@ -16,7 +16,7 @@ import (
 
 type Arpd struct {
 	done   chan bool
-	result chan mikrotik.Result
+	result chan *mikrotik.Result
 	cache  map[string]string
 }
 
@@ -55,23 +55,22 @@ func (a *Arpd) Collect() {
 				Log.Errorf("Routeros return error: %s", result.Error)
 				continue
 			}
-			a.processResult(&result.Reply)
+			if result.Reply == nil {
+				Log.Errorf("Routeros return empty response.")
+				continue
+			}
+			a.processResult(result.Reply)
 		}
 	}
 }
 
-func (a *Arpd) Result() chan mikrotik.Result {
+func (a *Arpd) Result() chan *mikrotik.Result {
 	return a.result
 }
 
 func (a *Arpd) processResult(result *routeros.Reply) {
-
-	if len(result.Re) <= 0 {
-		Log.Debug("Invalid result: %v", result)
-		return
-	}
 	for _, v := range result.Re {
-		Log.Debugf("Update: %s = %s", v.Map["mac-address"], v.Map["address"])
+		Log.Debugf("Update: %s -> %s", v.Map["mac-address"], v.Map["address"])
 		a.cache[v.Map["mac-address"]] = v.Map["address"]
 	}
 }
@@ -98,6 +97,7 @@ func main() {
 	routers, err := router.GetRoutersList(db)
 	if err != nil {
 		Log.Critical("Can't get list of routers from database. Error:", err)
+		return
 	}
 
 	workers := mikrotik.NewWorkers()
@@ -106,13 +106,13 @@ func main() {
 
 	arpd := &Arpd{
 		done:   make(chan bool),
-		result: make(chan mikrotik.Result),
+		result: make(chan *mikrotik.Result),
 	}
 	for _, device := range routers {
 		workers.AddNewDevice(device.PrivateAddress)
 	}
-
-	workers.ExecuteCommand("/ip/arp/print", arpd.Result())
+	arpentity := mikrotik.Arp{}
+	workers.Print(arpentity, arpd.Result())
 
 	arpd.Run()
 }

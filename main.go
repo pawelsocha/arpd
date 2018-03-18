@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pawelsocha/kryptond/config"
 	"github.com/pawelsocha/kryptond/database"
@@ -12,6 +14,10 @@ import (
 	"github.com/pawelsocha/kryptond/mikrotik"
 	"github.com/pawelsocha/kryptond/router"
 	routeros "github.com/pawelsocha/routeros"
+
+	"github.com/jinzhu/gorm"
+	//mysql
+	_ "github.com/jinzhu/gorm/dialects/mysql"
 )
 
 type Arpd struct {
@@ -20,7 +26,7 @@ type Arpd struct {
 	cache  map[string]string
 }
 
-func (a *Arpd) Run() {
+func (a *Arpd) Run(ctx context.Context) {
 
 	a.cache = make(map[string]string)
 	go a.Collect()
@@ -32,16 +38,21 @@ func (a *Arpd) Run() {
 	}
 
 	defer socket.Close()
-	Log.Info("started")
 
 	for {
-		conn, err := socket.Accept()
-		if err != nil {
-			Log.Errorf("Error accepting: %s", err.Error())
+		select {
+		case <-ctx.Done():
 			return
+		default:
+			Log.Info("Waiting for connection")
+			conn, err := socket.Accept()
+			if err != nil {
+				Log.Errorf("Error accepting: %s", err.Error())
+				return
+			}
+			Log.Infof("Accept connection from: %s", conn.RemoteAddr().String())
+			go a.handleConnection(conn)
 		}
-		Log.Infof("Accept connection from: %s", conn.RemoteAddr().String())
-		go a.handleConnection(conn)
 	}
 }
 
@@ -93,16 +104,20 @@ func main() {
 		return
 	}
 
-	db, err := database.Database(config)
-	routers, err := router.GetRoutersList(db)
+	database.Connection, err = gorm.Open("mysql", config.GetDatabaseDSN())
+
+	if err != nil {
+		Log.Critical("Can't connect to database. Error:", err)
+		return
+	}
+
+	routers, err := router.GetRoutersList()
 	if err != nil {
 		Log.Critical("Can't get list of routers from database. Error:", err)
 		return
 	}
 
 	workers := mikrotik.NewWorkers()
-
-	Log.Infof("routers: %v", routers)
 
 	arpd := &Arpd{
 		done:   make(chan bool),
@@ -111,8 +126,21 @@ func main() {
 	for _, device := range routers {
 		workers.AddNewDevice(device.PrivateAddress)
 	}
-	arpentity := mikrotik.Arp{}
-	workers.Print(arpentity, arpd.Result())
 
-	arpd.Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second * 60):
+				arpentity := mikrotik.Arp{}
+				workers.Print(arpentity, arpd.Result())
+			}
+		}
+	}()
+	Log.Infof("Started")
+	arpd.Run(ctx)
 }
